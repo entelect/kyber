@@ -27,6 +27,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -52,6 +53,7 @@ button:disabled {
 }
 
 input,
+select,
 textarea {
   width: 100%;
   border: 1px solid var(--border);
@@ -59,6 +61,10 @@ textarea {
   padding: 0.85rem 1rem;
   color: inherit;
   background: #ffffff;
+}
+
+select {
+  margin-top: 0.45rem;
 }
 
 textarea {
@@ -187,6 +193,51 @@ ol {
   font-size: 0.9rem;
 }
 
+.instruction-card,
+.preview-card {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1rem;
+  background: var(--surface-muted);
+}
+
+.instruction-card {
+  margin-bottom: 1rem;
+}
+
+.instruction-card ol {
+  margin-bottom: 0.8rem;
+}
+
+.instruction-card p {
+  margin-bottom: 0;
+  color: var(--text-muted);
+}
+
+.speaker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.preview-card {
+  margin-top: 1rem;
+}
+
+.preview-card summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.preview-card pre {
+  overflow: auto;
+  max-height: 240px;
+  margin: 0.8rem 0 0;
+  white-space: pre-wrap;
+  color: var(--text-muted);
+  font: 0.9rem/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
 .input-panel button {
   width: 100%;
   margin-top: 1rem;
@@ -267,6 +318,7 @@ ol {
   }
 
   input,
+  select,
   textarea {
     background: #111827;
   }
@@ -287,5 +339,9 @@ ol {
 
   .metrics-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .speaker-grid {
+    grid-template-columns: 1fr;
   }
 }

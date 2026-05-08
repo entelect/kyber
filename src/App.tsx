@@ -1,5 +1,6 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
 import { Analysis, analyzeTranscript, scoreToPercent } from './analysis';
+import { TranscriptTurn, formatTranscriptForAnalysis, formatTranscriptPreview, parseTranscript } from './transcript';
 
 const sampleTranscript = `Interviewer: Thanks for joining. Could you start by walking me through a recent project you led?
 Candidate: I led a migration from a legacy reporting service to a React dashboard.
@@ -14,8 +15,73 @@ Interviewer: Helpful context. I’ll leave time at the end for your questions ab
 function App() {
   const [meetingUrl, setMeetingUrl] = useState('');
   const [transcript, setTranscript] = useState(sampleTranscript);
+  const [parsedTurns, setParsedTurns] = useState<TranscriptTurn[]>([]);
+  const [speakers, setSpeakers] = useState<string[]>([]);
+  const [interviewerSpeaker, setInterviewerSpeaker] = useState('');
+  const [candidateSpeaker, setCandidateSpeaker] = useState('');
+  const [importMessage, setImportMessage] = useState('Paste a transcript or upload a Teams .vtt/.txt transcript.');
   const [analysis, setAnalysis] = useState<Analysis>(() => analyzeTranscript(sampleTranscript));
   const canAnalyze = useMemo(() => transcript.trim().length > 0, [transcript]);
+  const transcriptPreview = useMemo(() => formatTranscriptPreview(parsedTurns), [parsedTurns]);
+
+  function applyParsedTranscript(turns: TranscriptTurn[], detectedSpeakers: string[]) {
+    setParsedTurns(turns);
+    setSpeakers(detectedSpeakers);
+
+    const nextInterviewerSpeaker = detectedSpeakers[0] ?? '';
+    const nextCandidateSpeaker = detectedSpeakers.find((speaker) => speaker !== nextInterviewerSpeaker) ?? '';
+
+    setInterviewerSpeaker(nextInterviewerSpeaker);
+    setCandidateSpeaker(nextCandidateSpeaker);
+    setTranscript(
+      turns.length > 0 && nextInterviewerSpeaker
+        ? formatTranscriptForAnalysis(turns, nextInterviewerSpeaker)
+        : formatTranscriptPreview(turns),
+    );
+  }
+
+  function handleFileUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const isSupportedFile = file.name.toLowerCase().endsWith('.vtt') || file.name.toLowerCase().endsWith('.txt');
+
+    if (!isSupportedFile) {
+      setImportMessage('Please upload a .vtt or .txt transcript. Recording upload will come after the transcript flow is stable.');
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const rawText = String(reader.result ?? '');
+      const parsedTranscript = parseTranscript(rawText, file.name);
+
+      applyParsedTranscript(parsedTranscript.turns, parsedTranscript.speakers);
+      setImportMessage(
+        parsedTranscript.speakers.length > 0
+          ? `Imported ${parsedTranscript.turns.length} transcript turns from ${file.name}. Confirm the interviewer before analyzing.`
+          : `Imported ${file.name}, but no speaker labels were detected. You can still analyze the raw text.`,
+      );
+    };
+
+    reader.onerror = () => {
+      setImportMessage(`Could not read ${file.name}. Try downloading the transcript again or paste the text manually.`);
+    };
+
+    reader.readAsText(file);
+  }
+
+  function handleInterviewerChange(nextSpeaker: string) {
+    setInterviewerSpeaker(nextSpeaker);
+
+    if (parsedTurns.length > 0) {
+      setTranscript(formatTranscriptForAnalysis(parsedTurns, nextSpeaker));
+    }
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -32,8 +98,8 @@ function App() {
           <p className="eyebrow">Interview feedback coach</p>
           <h1>Turn an interview transcript into feedback you can act on.</h1>
           <p className="hero-copy">
-            Paste a Teams transcript for now, then review interviewer strengths, coaching opportunities,
-            and a scorecard you can compare across interviews.
+            Upload or paste a Teams transcript, confirm who the interviewer was, then review strengths,
+            coaching opportunities, and a scorecard you can compare across interviews.
           </p>
         </div>
         <div className="hero-card" aria-label="Current interviewer score">
@@ -48,9 +114,60 @@ function App() {
           <div className="panel-header">
             <div>
               <h2>Transcript source</h2>
-              <p>Teams API access can be added later with Microsoft Graph auth. The basic flow starts with pasted text.</p>
+              <p>Use the transcript download from Teams first. Recording upload and Gemini transcription can come next.</p>
             </div>
           </div>
+
+          <div className="instruction-card">
+            <h3>How to import a Teams transcript</h3>
+            <ol>
+              <li>Open the meeting in Teams from Calendar, Chat, or Recap.</li>
+              <li>Open the Transcript or Recap tab and choose Download.</li>
+              <li>Pick .vtt if offered; .txt works if you copy the transcript manually.</li>
+              <li>Upload the file here, then select which detected speaker was the interviewer.</li>
+            </ol>
+            <p>If download is disabled, open the transcript pane, copy all text, and paste it below.</p>
+          </div>
+
+          <label htmlFor="transcript-file">Upload Teams transcript file</label>
+          <input
+            id="transcript-file"
+            type="file"
+            accept=".vtt,.txt,text/vtt,text/plain"
+            onChange={handleFileUpload}
+          />
+          <p className="hint">{importMessage}</p>
+
+          {speakers.length > 0 && (
+            <div className="speaker-grid">
+              <label htmlFor="interviewer-speaker">
+                Interviewer
+                <select
+                  id="interviewer-speaker"
+                  value={interviewerSpeaker}
+                  onChange={(event) => handleInterviewerChange(event.target.value)}
+                >
+                  {speakers.map((speaker) => (
+                    <option key={speaker} value={speaker}>{speaker}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label htmlFor="candidate-speaker">
+                Candidate
+                <select
+                  id="candidate-speaker"
+                  value={candidateSpeaker}
+                  onChange={(event) => setCandidateSpeaker(event.target.value)}
+                >
+                  <option value="">Not selected</option>
+                  {speakers.map((speaker) => (
+                    <option key={speaker} value={speaker}>{speaker}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
 
           <label htmlFor="meeting-url">Teams meeting link or recording URL</label>
           <input
@@ -61,14 +178,28 @@ function App() {
             placeholder="https://teams.microsoft.com/l/meetup-join/..."
           />
           <p className="hint">
-            Stored locally in this page state only. Transcript import is not connected yet.
+            Optional reference only for now. We are not using Entra or Microsoft Graph in this MVP.
           </p>
+
+          {transcriptPreview && (
+            <details className="preview-card">
+              <summary>Preview parsed transcript</summary>
+              <pre>{transcriptPreview}</pre>
+            </details>
+          )}
 
           <label htmlFor="transcript">Transcript</label>
           <textarea
             id="transcript"
             value={transcript}
-            onChange={(event) => setTranscript(event.target.value)}
+            onChange={(event) => {
+              setTranscript(event.target.value);
+              setParsedTurns([]);
+              setSpeakers([]);
+              setInterviewerSpeaker('');
+              setCandidateSpeaker('');
+              setImportMessage('Manual transcript edits are ready to analyze.');
+            }}
             placeholder="Interviewer: Tell me about a time..."
           />
 
